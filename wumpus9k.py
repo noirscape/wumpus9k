@@ -67,13 +67,31 @@ Please specify the channel to mention (in the format of #channel)```''')
         else:
             await main_message.edit(content='Invalid response or timeout. Cancelled config menu.')
 
+    async def on_message(self, message):
+        self.cursor.execute('SELECT message_contents FROM message_db WHERE channel_id = ? AND message_contents = ? ', (message.channel.id, message.content))
+        message_sent_before = self.cursor.fetchone()
+        if not message_sent_before:
+            self.cursor.execute('INSERT INTO message_db(message_contents, channel_id) VALUES (?,?)',
+                (message.content, message.channel.id))
+            self.conn.commit()
+        else:
+            await message.delete()
+            self.cursor.execute('SELECT user_id FROM violations WHERE user_id = ?', (message.author.id,))
+            violated_before = self.cursor.fetchone()
+            if violated_before:
+                self.cursor.execute('UPDATE violations SET amount_of_times_muted = amount_of_times_muted + 1 WHERE user_id = ?', (message.author.id,))
+                self.conn.commit()
+                self.cursor.execute('SELECT amount_of_times_muted FROM violations WHERE user_id = ?', (message.author.id,))
+            else:
+                self.cursor.execute('INSERT INTO violations(user_id) VALUES (?)', (message.author.id,))
+                self.conn.commit()
 
 def create_database(conn):
     conn.execute('''
         CREATE TABLE IF NOT EXISTS violations (
             violation_id integer PRIMARY KEY AUTOINCREMENT,
             user_id integer,
-            amount_of_times_muted integer
+            amount_of_times_muted integer DEFAULT 1
         );''')
     conn.execute(''' 
         CREATE TABLE IF NOT EXISTS registered_channels (
