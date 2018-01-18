@@ -1,4 +1,4 @@
-# TP-Bot - A discord bot for the ThemePlaza Discord
+# Wumpus9K - ROBOT9000 for Discord
 # Copyright (C) 2018 Valentijn "Ev1l0rd"
 #
 # This program is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ def load_cog(cog):
 
 @bot.event
 async def on_ready():
-    print('WUMPUS9K  Copyright (C) 2018  Valentijn "Ev1l0rd"\n' +
+    print('WUMPUS9K  Copyright (C) 2018 Valentijn "Ev1l0rd"\n' +
         'This program comes with ABSOLUTELY NO WARRANTY;\n' + 
         'This is free software, and you are welcome to redistribute it\n' +
         'under certain conditions;')
