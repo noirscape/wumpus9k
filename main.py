@@ -2,7 +2,7 @@
 # Copyright (C) 2018 Valentijn "Ev1l0rd"
 #
 # This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
+# it under the terms of the GNU Affero General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
@@ -11,7 +11,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
+# You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import yaml
 import discord
@@ -47,14 +47,5 @@ async def on_ready():
     print(config['prefix'])
     print('------------')
     load_cog('wumpus9k')
-
-@bot.command()
-async def about(ctx):
-    '''Show a quick link to the bot's Github repository.'''
-    embed = discord.Embed(title='TP-Bot',
-        description='A bot for the ThemePlaza discord, made by ev1l0rd.',
-        url='https://github.com/ev1l0rd/tp-bot')
-    embed.set_thumbnail(url='https://avatars2.githubusercontent.com/u/13433513')
-    await ctx.send(embed=embed)
 
 bot.run(config['token'])

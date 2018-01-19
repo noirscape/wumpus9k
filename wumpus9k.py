@@ -1,3 +1,27 @@
+# Wumpus9K - ROBOT9000 for Discord
+# Copyright (C) 2018 Valentijn "Ev1l0rd"
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+#   Additional Terms 7.b and 7.c of AGPLv3 apply to this file:
+#       * Requiring preservation of specified reasonable legal notices or
+#         author attributions in that material or in the Appropriate Legal
+#         Notices displayed by works containing it.
+#       * Prohibiting misrepresentation of the origin of that material,
+#         or requiring that modified versions of such material be marked in
+#         reasonable ways as different from the original version.
+
 import discord
 from discord.ext import commands
 import yaml
@@ -12,6 +36,7 @@ class wumpus9k:
         create_database(self.conn)
 
     @commands.command()
+    @commands.has_permissions(manage_guild=True)
     async def wumpus9kconfig(self, ctx):
         main_message = await ctx.send(content='''```
 wumpus9k config menu
@@ -33,9 +58,11 @@ Please reply with the number for the config you wish to change.''')
                 await reply.delete()
                 await self.register_channel(ctx, main_message)
             elif reply.content.lower().strip() == '2':
+                await reply.delete()
                 await self.empty_message_db(ctx, main_message)
             elif reply.content.lower().strip() == '3':
-                pass
+                await reply.delete()
+                await self.clear_user(ctx, main_message)
             else:
                 await main_message.edit(content='Cancelled config menu.')
         else:
@@ -80,8 +107,8 @@ Please specify the channel to clean the database of (in the format of #channel)`
         reply = await self.bot.wait_for('message', check=channel_check)
         if reply and reply.channel_mentions:
             clean_channel = reply.channel_mentions[0]
-            cursor.execute('SELECT channel_id FROM message_db WHERE channel_id=?', (clean_channel.id,))
-            if cursor.rowcount != 0:
+            cursor.execute('SELECT channel_id FROM message_db')
+            if (clean_channel.id,) in cursor.fetchall():
                 cursor.execute('DELETE FROM message_db WHERE channel_id=?', (clean_channel.id,))
                 await main_message.edit(content='Channel messages succesfully emptied from the database.')
             else:
@@ -102,11 +129,13 @@ Please specify the user to remove all violations of (in the format @user)```''')
         reply = await self.bot.wait_for('message', check=channel_check)
         if reply and reply.mentions:
             cleared_user = reply.mentions[0]
-            cursor.execute('SELECT user_id FROM message_db WHERE user_id=?', (cleared_user.id,))
+            cursor.execute('SELECT user_id FROM violations WHERE user_id=?', (cleared_user.id,))
             has_violations = cursor.fetchone()
             if has_violations:
-                cursor.execute('DELETE FROM message_db WHERE user_id=?', (cleared_user.id,))
+                cursor.execute('DELETE FROM violations WHERE user_id=?', (cleared_user.id,))
                 await main_message.edit(content='User violations succesfully removed from the database.')
+                for channels in ctx.message.guild.channels:
+                    await channels.set_permissions(cleared_user, overwrite=None)
             else:
                 await main_message.edit(content='There were no violations for this user in the database.')
         else:
@@ -115,33 +144,36 @@ Please specify the user to remove all violations of (in the format @user)```''')
     async def on_message(self, message):
         if type(message.channel) is discord.TextChannel:
             cursor = self.conn.cursor()
-            cursor.execute('SELECT message_contents FROM message_db WHERE channel_id = ? AND message_contents = ? ', (message.channel.id, message.content))
-            if not cursor.rowcount == 0:
-                cursor.execute('INSERT INTO message_db(message_contents, channel_id) VALUES (?,?)',
-                (message.content, message.channel.id))
-                self.conn.commit()
-            else:
-                await message.delete()
-                cursor.execute('SELECT user_id FROM violations WHERE user_id = ?', (message.author.id,))
-                violated_before = cursor.fetchone()
-                if violated_before:
-                    cursor.execute('UPDATE violations SET amount_of_times_muted = amount_of_times_muted + 1 WHERE user_id = ?', (message.author.id,))
+            cursor.execute('SELECT channel_id FROM registered_channels WHERE channel_id=?', (message.channel.id,))
+            is_registered = cursor.fetchone()
+            if is_registered:
+                cursor.execute('SELECT message_contents FROM message_db WHERE channel_id = ? AND message_contents = ? ', (message.channel.id, message.content))
+                if not (message.content,) in cursor.fetchall():
+                    cursor.execute('INSERT INTO message_db(message_contents, channel_id) VALUES (?,?)',
+                    (message.content, message.channel.id))
                     self.conn.commit()
                 else:
-                    cursor.execute('INSERT INTO violations(user_id) VALUES (?)', (message.author.id,))
-                    self.conn.commit()
-                self.cursor.execute('SELECT amount_of_times_muted FROM violations WHERE user_id = ?', (message.author.id,))
-                mute_to_apply = cursor.fetchone()[0]
-                if mute_to_apply == 1:
-                    await message.author.send(content="You have attempted to send a message that has been send before in this channel. The bot has automatically removed your message.\n" +
-                        "The next time this happens, you will be automatically muted in the channel {0}.".format(message.channel.mention))
-                else:
-                    mute_in_minutes = mute_to_apply * 2
-                    await message.channel.set_permissions(message.author, read_messages=True, send_messages=False)
-                    await message.author.send(content="You have attempted to send a message that has been send before in this channel. The bot has automatically removed your message.\n" +
-                        "You have been automatically muted for {0} minutes.".format(mute_in_minutes))
-                    await asyncio.sleep(mute_in_minutes * 60)
-                    await message.author.send(content="You have been unmuted. Please do not do this again or you will be muted for longer. If you wish to have your mutes reset, please contact a moderator.")
+                    await message.delete()
+                    cursor.execute('SELECT user_id FROM violations WHERE user_id = ?', (message.author.id,))
+                    violated_before = cursor.fetchone()
+                    if violated_before:
+                        cursor.execute('UPDATE violations SET amount_of_times_muted = amount_of_times_muted + 1 WHERE user_id = ?', (message.author.id,))
+                        self.conn.commit()
+                    else:
+                        cursor.execute('INSERT INTO violations(user_id) VALUES (?)', (message.author.id,))
+                        self.conn.commit()
+                    cursor.execute('SELECT amount_of_times_muted FROM violations WHERE user_id = ?', (message.author.id,))
+                    mute_to_apply = cursor.fetchone()[0]
+                    if mute_to_apply == 1:
+                        await message.author.send(content="You have attempted to send a message that has been send before in this channel. The bot has automatically removed your message.\n" +
+                            "The next time this happens, you will be automatically muted in the channel {0}.".format(message.channel.mention))
+                    else:
+                        mute_in_minutes = mute_to_apply * 2
+                        await message.channel.set_permissions(message.author, read_messages=True, send_messages=False)
+                        await message.author.send(content="You have attempted to send a message that has been send before in this channel. The bot has automatically removed your message.\n" +
+                            "You have been automatically muted for {0} minutes.".format(mute_in_minutes))
+                        await asyncio.sleep(mute_in_minutes * 60)
+                        await message.author.send(content="You have been unmuted. Please do not do this again or you will be muted for longer. If you wish to have your mutes reset, please contact a moderator.")
 
 
 def create_database(conn):
