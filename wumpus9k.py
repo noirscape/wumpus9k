@@ -24,7 +24,6 @@
 
 import discord
 from discord.ext import commands
-import yaml
 import sqlite3
 import datetime
 import asyncio
